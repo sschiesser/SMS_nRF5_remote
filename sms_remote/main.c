@@ -50,7 +50,9 @@
 #define CONNECTED_LED_PIN               BSP_BOARD_LED_1                             /**< Is on when device has connected. */
 
 #define LEDBUTTON_LED_PIN               BSP_BOARD_LED_2                             /**< LED to be toggled with the help of the LED Button Service. */
+#define LEDBUTTON_LED_PIN2							BSP_BOARD_LED_3
 #define LEDBUTTON_BUTTON_PIN            BSP_BUTTON_0                                /**< Button that will trigger the notification event with the LED Button Service */
+#define LEDBUTTON_BUTTON_PIN2						BSP_BUTTON_1
 
 #define DEVICE_NAME                     "Nordic_Blinky"                             /**< Name of device. Will be included in the advertising data. */
 
@@ -461,7 +463,7 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
     switch (pin_no)
     {
         case LEDBUTTON_BUTTON_PIN:
-            NRF_LOG_INFO("Send button state change.\r\n");            
+            NRF_LOG_INFO("Send button state change.\r\n");
             err_code = ble_lbs_on_button_change(&m_lbs, button_action);
             if (err_code != NRF_SUCCESS &&
                 err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
@@ -470,6 +472,18 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
                 APP_ERROR_CHECK(err_code);
             }
             break;
+						
+				case LEDBUTTON_BUTTON_PIN2:
+						NRF_LOG_INFO("Send button 2 state change.\r\n");
+						button_action |= 0x10;
+						err_code = ble_lbs_on_button_change(&m_lbs, button_action);
+						if(err_code != NRF_SUCCESS &&
+							 err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+							 err_code != NRF_ERROR_INVALID_STATE)
+						{
+								APP_ERROR_CHECK(err_code);
+						}
+						break;
 
         default:
             APP_ERROR_HANDLER(pin_no);
@@ -487,7 +501,8 @@ static void buttons_init(void)
     //The array must be static because a pointer to it will be saved in the button handler module.
     static app_button_cfg_t buttons[] =
     {
-        {LEDBUTTON_BUTTON_PIN, false, BUTTON_PULL, button_event_handler}
+        {LEDBUTTON_BUTTON_PIN, false, BUTTON_PULL, button_event_handler},
+				{LEDBUTTON_BUTTON_PIN2, false, BUTTON_PULL, button_event_handler}
     };
 
     err_code = app_button_init(buttons, sizeof(buttons) / sizeof(buttons[0]),
