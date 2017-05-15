@@ -473,22 +473,22 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
             }
             break;
 						
-				case LEDBUTTON_BUTTON_PIN2:
-						NRF_LOG_INFO("Send button 2 state change.\r\n");
-						button_action |= 0x10;
-						err_code = ble_lbs_on_button_change(&m_lbs, button_action);
-						if(err_code != NRF_SUCCESS &&
-							 err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
-							 err_code != NRF_ERROR_INVALID_STATE)
-						{
-								APP_ERROR_CHECK(err_code);
-						}
-						break;
+		case LEDBUTTON_BUTTON_PIN2:
+			NRF_LOG_INFO("Send button 2 state change.\r\n");
+			button_action |= 0x10;
+			err_code = ble_lbs_on_button_change(&m_lbs, button_action);
+			if(err_code != NRF_SUCCESS &&
+				err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+				err_code != NRF_ERROR_INVALID_STATE)
+			{
+				APP_ERROR_CHECK(err_code);
+			}
+			break;
 
-        default:
-            APP_ERROR_HANDLER(pin_no);
-            break;
-    }
+		default:
+			APP_ERROR_HANDLER(pin_no);
+			break;
+	}
 }
 
 
