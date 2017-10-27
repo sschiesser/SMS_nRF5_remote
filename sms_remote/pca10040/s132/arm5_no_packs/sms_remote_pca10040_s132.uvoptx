@@ -171,7 +171,7 @@
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>0</BreakIfRCount>
-          <Filename>&lt;1&gt;..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
+          <Filename>..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
           <ExecCommand></ExecCommand>
           <Expression></Expression>
         </Bp>
@@ -187,7 +187,7 @@
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>0</BreakIfRCount>
-          <Filename>&lt;1&gt;..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
+          <Filename>..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
           <ExecCommand></ExecCommand>
           <Expression></Expression>
         </Bp>
@@ -431,7 +431,7 @@
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>0</BreakIfRCount>
-          <Filename>&lt;1&gt;..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
+          <Filename>..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
           <ExecCommand></ExecCommand>
           <Expression></Expression>
         </Bp>
@@ -447,7 +447,7 @@
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>0</BreakIfRCount>
-          <Filename>&lt;1&gt;..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
+          <Filename>..\..\..\..\..\..\components\ble\common\ble_advdata.c</Filename>
           <ExecCommand></ExecCommand>
           <Expression></Expression>
         </Bp>
