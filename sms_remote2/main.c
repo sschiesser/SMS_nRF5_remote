@@ -97,7 +97,7 @@
 #define APP_TIMER_OP_QUEUE_SIZE         8										/**< Size of timer operation queues. */
 // Batgauge/SAADC
 #define SMS_BATGAUGE_SAMPLE_RATE_MS		1000									/* Time between each ADC sample */
-#define ADC_SAMPLES_IN_BUFFER 			10										/* Number of ADC samples before a batgauge averaging is called */
+#define ADC_SAMPLES_IN_BUFFER 			20										/* Number of ADC samples before a batgauge averaging is called */
 #define BAT_CONV_ADC0					147
 #define BAT_CONV_ADC100					174
 #define BAT_CONV_DELTA					(100/(BAT_CONV_ADC100-BAT_CONV_ADC0))
