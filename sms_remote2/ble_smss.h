@@ -51,16 +51,16 @@ extern "C" {
 #define SMSS_UUID_BUTTON_CHAR 0x1C58
 #define SMSS_UUID_PRESS_CHAR  0x1C59
 #define SMSS_UUID_IMU_CHAR	  0x1C5A
-#define SMSS_UUID_UPDATE_CHAR 0x1C60
+#define SMSS_UUID_WRITE_CHAR 0x1C60
 	
 					  
 typedef struct ble_smss_s ble_smss_t;
 							  
-typedef void (*ble_smss_app_update_handler_t)	(ble_smss_t * p_smss, uint8_t *data);
+typedef void (*ble_smss_app_write_handler_t)	(ble_smss_t * p_smss, uint8_t *data);
 				
 typedef struct
 {
-	ble_smss_app_update_handler_t app_update_function;
+	ble_smss_app_write_handler_t app_write_function;
 }ble_smss_init_t;	
 							  
 /**@brief LED Button Service structure. This structure contains various status information for the service. */
@@ -71,8 +71,8 @@ typedef struct ble_smss_s
     ble_gatts_char_handles_t    	button_char_handles; /**< Handles related to the Button Characteristic. */
 	ble_gatts_char_handles_t		press_char_handles;
 	ble_gatts_char_handles_t		imu_char_handles;
-	ble_gatts_char_handles_t		app_update_handles;
-	ble_smss_app_update_handler_t	app_update_function;
+	ble_gatts_char_handles_t		app_write_handles;
+	ble_smss_app_write_handler_t	app_write_function;
 	uint8_t							uuid_type;
 }ble_smss_t;
 

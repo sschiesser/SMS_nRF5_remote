@@ -43,11 +43,11 @@ static void on_write(ble_smss_t * p_smss, ble_evt_t * p_ble_evt)
 {
     ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 	
-	if((p_evt_write->handle == p_smss->app_update_handles.value_handle) &&
+	if((p_evt_write->handle == p_smss->app_write_handles.value_handle) &&
 		(p_evt_write->len == 4) &&
-		(p_smss->app_update_function != NULL))
+		(p_smss->app_write_function != NULL))
 	{
-		p_smss->app_update_function(p_smss, p_evt_write->data);
+		p_smss->app_write_function(p_smss, p_evt_write->data);
 	}
 }
 
@@ -147,14 +147,14 @@ static uint32_t button_char_add(ble_smss_t * p_smss)
 
 
 
-static uint32_t app_update_char_add(ble_smss_t * p_smss)
+static uint32_t app_write_char_add(ble_smss_t * p_smss)
 {
 	uint32_t			err_code = 0;
 	
 	// Add custom characteristic UUID (2.A)
 	ble_uuid_t			char_uuid;
 	ble_uuid128_t		base_uuid = SMSS_UUID_BASE;
-	char_uuid.uuid = SMSS_UUID_UPDATE_CHAR;
+	char_uuid.uuid = SMSS_UUID_WRITE_CHAR;
 	sd_ble_uuid_vs_add(&base_uuid, &char_uuid.type);
 	APP_ERROR_CHECK(err_code);
 	
@@ -198,13 +198,13 @@ static uint32_t app_update_char_add(ble_smss_t * p_smss)
 	err_code = sd_ble_gatts_characteristic_add(p_smss->service_handle,
 												&char_md,
 												&attr_char_value,
-												&p_smss->app_update_handles);
+												&p_smss->app_write_handles);
 	APP_ERROR_CHECK(err_code);
 
 	NRF_LOG_DEBUG("Application update characteristic added\n\r");
 	NRF_LOG_DEBUG("- service handle: %#x\n\r", p_smss->service_handle);
-	NRF_LOG_DEBUG("- char value handle: %#x\r\n", p_smss->app_update_handles.value_handle);
-	NRF_LOG_DEBUG("- char cccd handle: %#x\r\n\r\n", p_smss->app_update_handles.cccd_handle);
+	NRF_LOG_DEBUG("- char value handle: %#x\r\n", p_smss->app_write_handles.value_handle);
+	NRF_LOG_DEBUG("- char cccd handle: %#x\r\n\r\n", p_smss->app_write_handles.cccd_handle);
 	
 	return NRF_SUCCESS;
 }
@@ -225,7 +225,7 @@ void ble_smss_init(ble_smss_t * p_smss, const ble_smss_init_t * p_smss_init)
     // OUR_JOB: Step 3.B, Set our service connection handle to default value. I.e. an invalid handle since we are not yet in a connection.
     p_smss->conn_handle = BLE_CONN_HANDLE_INVALID;
 	// Adding app update function pointer
-	p_smss->app_update_function = p_smss_init->app_update_function;
+	p_smss->app_write_function = p_smss_init->app_write_function;
 
     // FROM_SERVICE_TUTORIAL: Add our service
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY,
@@ -236,7 +236,7 @@ void ble_smss_init(ble_smss_t * p_smss, const ble_smss_init_t * p_smss_init)
     
     // OUR_JOB: Call the function our_char_add() to add our new characteristic to the service. 
     button_char_add(p_smss);
-	app_update_char_add(p_smss);
+	app_write_char_add(p_smss);
 }
 
 uint32_t ble_smss_on_button_change(ble_smss_t * p_smss, uint16_t button_state)
