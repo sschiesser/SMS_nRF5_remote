@@ -35,7 +35,6 @@
 #include "app_timer.h"
 
 #include "app_button.h"
-#include "low_power_pwm.h"
 #include "bsp.h"
 #include "ble_gap.h"
 #include "nrf_delay.h"
@@ -47,9 +46,6 @@
 #include "ble_smss.h"
 #include "ble_bas.h"
 #include "ble_advertising.h"
-
-#include "sms_pressure.h"
-#include "sms_imu.h"
 
 #define NRF_LOG_MODULE_NAME "APP"
 #include "nrf_log.h"
@@ -63,13 +59,13 @@
 #if (NRF_SD_BLE_API_VERSION == 3)
 	#define NRF_BLE_MAX_MTU_SIZE		GATT_MTU_SIZE_DEFAULT					/**< MTU size used in the softdevice enabling and to reply to a BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST event. */
 #endif
-#define SMS_ADV_INTERVAL                64										/**< The advertising interval (in units of 0.625 ms; this value corresponds to 40 ms). */
+#define SMS_ADV_INTERVAL                320 //64										/**< The advertising interval (in units of 0.625 ms; this value corresponds to 40 ms). */
 #define SMS_ADV_TIMEOUT_IN_SECONDS      30										/**< The advertisement timeout value in seconds */
 #define SMS_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2	/**< Reply when unsupported features are requested. */
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)			/**< Minimum acceptable connection interval (15 ms). */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)			/**< Maximum acceptable connection interval (20 ms). */
-#define SLAVE_LATENCY                   10										/**< Slave latency. */
-#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(2000, UNIT_10_MS)			/**< Connection supervisory time-out (2 seconds). */
+#define SLAVE_LATENCY                   499										/**< Slave latency. Range: 0 - 499. Constraint: sup_timeout > 2 x (slave_latency + 1) x conn_interval */
+#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(21000, UNIT_10_MS)			/**< Connection supervisory time-out (2 seconds). */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER)	/**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)	/**< Time between each call to sd_ble_gap_conn_param_update after the first call (5 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3										/**< Number of attempts before giving up the connection parameter negotiation. */
@@ -98,8 +94,8 @@
 #define SMS_BUTTON_DETECTION_DELAY		APP_TIMER_TICKS(5, APP_TIMER_PRESCALER)	/**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 #define SMS_BUTTON_LONG_PRESS_MS		3000 
 #define SMS_LED_BLINK_ULTRA_MS			80
-#define SMS_LED_BLINK_FAST_MS			600
-#define SMS_LED_BLINK_MEDIUM_MS			2000
+#define SMS_LED_BLINK_FAST_MS			200
+#define SMS_LED_BLINK_MEDIUM_MS			1400
 #define SMS_LED_BLINK_SLOW_MS			10000
 #define SMS_LED_BLINK_CONNECT			10
 // Timers
@@ -113,42 +109,6 @@
 #define BAT_CONV_ADC100					161
 #define BAT_CONV_DELTA					(100/(BAT_CONV_ADC100-BAT_CONV_ADC0))
 #define BAT_CONV_OFFSET					(-BAT_CONV_DELTA * BAT_CONV_ADC0)
-// PWM
-#define PWM_PERIOD_129HZ				250 // Duty cycle (PWM/off) = 50%
-#define PWM_PERIOD_198HZ				200	// Duty cycle (PWM/off) = 45%
-#define PWM_PERIOD_337HZ				150	// Duty cycle (PWM/off) = 39%
-#define PWM_PERIOD_682HZ				100	// Duty cycle (PWM/off) = 32%
-#define PWM_PERIOD_1057HZ				75	// Duty cycle (PWM/off) = 28%
-#define SMS_PWM_PERIOD					PWM_PERIOD_129HZ
-#define SMS_LED_ON_DUTY					(0.2 * SMS_PWM_PERIOD) // Duty cycle within PWM
-#define SMS_LED_RUNNING_DUTY			2		// in %
-#if(SMS_PWM_PERIOD == PWM_PERIOD_129HZ)
-#define SMS_LED_BLINK_ULTRA_TICKS		6		// 100ms
-#define SMS_LED_BLINK_FAST_TICKS		15		// 250ms
-#define SMS_LED_BLINK_MEDIUM_TICKS		60		// 1s
-#define SMS_LED_BLINK_SLOW_TICKS		240		// 4s
-#elif(SMS_PWM_PERIOD == PWM_PERIOD_198HZ)
-#define SMS_LED_BLINK_ULTRA_TICKS		9		// 100ms
-#define SMS_LED_BLINK_FAST_TICKS		22		// 250ms
-#define SMS_LED_BLINK_MEDIUM_TICKS		87		// 1s
-#define SMS_LED_BLINK_SLOW_TICKS		348		// 4s
-#elif(SMS_PWM_PERIOD == PWM_PERIOD_337HZ)
-#define SMS_LED_BLINK_ULTRA_TICKS		12		// 100ms
-#define SMS_LED_BLINK_FAST_TICKS		32		// 250ms
-#define SMS_LED_BLINK_MEDIUM_TICKS		128		// 1s
-#define SMS_LED_BLINK_SLOW_TICKS		512		// 4s
-#elif(SMS_PWM_PERIOD == PWM_PERIOD_682HZ)
-#define SMS_LED_BLINK_ULTRA_TICKS		21		// 100ms
-#define SMS_LED_BLINK_FAST_TICKS		53		// 250ms
-#define SMS_LED_BLINK_MEDIUM_TICKS		212		// 1s
-#define SMS_LED_BLINK_SLOW_TICKS		848		// 4s
-#elif(SMS_PWM_PERIOD == PWM_PERIOD_1057HZ)
-#define SMS_LED_BLINK_ULTRA_TICKS		30		// 100ms
-#define SMS_LED_BLINK_FAST_TICKS		74		// 250ms
-#define SMS_LED_BLINK_MEDIUM_TICKS		294		// 1s
-#define SMS_LED_BLINK_SLOW_TICKS		1176	// 4s
-#endif
-
 
 
 
@@ -214,10 +174,6 @@ static uint32_t							m_adc_evt_counter;							/* ADC event counter (debug) */
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;	/* Handle of the current connection */
 ble_smss_t								m_smss_service;								/* Structure used to identify the SMS service */
 static ble_bas_t 						m_bas;                                   	/* Structure used to identify the battery service */
-// PWM
-static low_power_pwm_t					low_power_pwm_conn;							/* PWM instance for LED_0 (connection) */
-static low_power_pwm_t					low_power_pwm_data;							/* PWM instance for LED_1 (data) */
-
 
 // Timers
 APP_TIMER_DEF(button_press_timer_id);
@@ -247,7 +203,8 @@ void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info)
 #ifndef DEBUG
 	NVIC_SystemReset();
 #else
-	while(1){};
+	NVIC_SystemReset();
+//	while(1){};
 #endif //DEBUG
 }
 
@@ -392,10 +349,24 @@ static void led0_timer_handler(void)
 	NRF_LOG_INFO("LED0 timeout... app_state = %d, led state = %d\n\r", m_app_state.sms, lstate);
 	switch(m_app_state.sms) {
 		case SMS_ADVERTISING:
-			bsp_board_led_invert(SMS_CONN_LED_PIN);
-			app_timer_start(led0_timer_id,
+			if(m_app_state.led[0] == LED_ON) {
+				m_app_state.led[0] = LED_OFF;
+				bsp_board_led_off(SMS_CONN_LED_PIN);
+				app_timer_start(led0_timer_id,
+					APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_MEDIUM_MS, UNIT_1_00_MS), 0),
+					NULL);
+			}
+			else {
+				m_app_state.led[0] = LED_ON;
+				bsp_board_led_on(SMS_CONN_LED_PIN);
+				app_timer_start(led0_timer_id,
 					APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_FAST_MS, UNIT_1_00_MS), 0),
 					NULL);
+			}
+//			bsp_board_led_invert(SMS_CONN_LED_PIN);
+//			app_timer_start(led0_timer_id,
+//					APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_FAST_MS, UNIT_1_00_MS), 0),
+//					NULL);
 			break;
 		
 		case SMS_RUNNING:
@@ -567,154 +538,7 @@ static void saadc_timer_handler(void * p_context)
 //	nrf_drv_saadc_sample();
 }
 
-/**@brief Function for handling the PWM event for connection LED.
- *
- * @details	Depending on the PWM instance and the current LED state, toggle the
- *			PWM or switch it off.
- *
- * @param[in] p_context	Select the PWM instance which has called the handler.
- */
-static void pwm_conn_handler(void * p_context)
-{
 //	static uint16_t change_cnt;
-//	static uint8_t blink_cnt;
-//	uint32_t max_changes = 0;
-//	uint8_t max_blinks = 0;
-//	
-//	uint32_t err_code;
-
-//	low_power_pwm_t * pwm_instance = (low_power_pwm_t*)p_context;
-//	
-//	// Commands for LED_0
-//	if(pwm_instance->bit_mask == BSP_LED_0_MASK)
-//	{
-//		switch(m_app_state.led[0]) {
-//			case LED_ADVERTISING:
-//				max_changes = SMS_LED_BLINK_MEDIUM_TICKS;
-//				max_blinks = 0;
-//				break;
-//			case LED_CONNECTING:
-//				max_changes = SMS_LED_BLINK_ULTRA_TICKS;
-//				max_blinks = 4;
-//				break;
-//			default:
-//				break;
-//		}
-
-//		change_cnt++;
-//		
-//		if(change_cnt > max_changes) {
-//			switch(m_app_state.led[0]) {
-//				case LED_ADVERTISING:
-//					if(pwm_instance->duty_cycle > 0) {
-//						err_code = low_power_pwm_duty_set(pwm_instance, 0);
-//					}
-//					else {
-//						err_code = low_power_pwm_duty_set(pwm_instance, SMS_LED_ON_DUTY);
-//					}
-//					APP_ERROR_CHECK(err_code);
-//					break;
-//					
-//				case LED_CONNECTING:
-//					if(pwm_instance->duty_cycle > 0) {
-//						blink_cnt++;
-//						err_code = low_power_pwm_duty_set(pwm_instance, 0);
-//					}
-//					else {
-//						err_code = low_power_pwm_duty_set(pwm_instance, SMS_LED_ON_DUTY);
-//					}
-//					APP_ERROR_CHECK(err_code);
-//					
-//					if(blink_cnt > max_blinks) {
-//						blink_cnt = 0;
-////						m_app_state.pwm[0] = PWM_OFF;
-////						m_app_state.led[0] = LED_CONNECTED;
-//						m_app_state.sms = SMS_RUNNING;
-////						m_app_state.batgauge.start = true;
-//					}
-//					break;
-//						
-//				default:
-//					break;
-//			}
-
-//			change_cnt = 0;
-//		}
-//	}
-}
-
-/**@brief Function for handling the PWM event for data LED.
- *
- * @details	Depending on the PWM instance and the current LED state, toggle the
- *			PWM or switch it off.
- *
- * @param[in] p_context	Select the PWM instance which has called the handler.
- */
-static void pwm_data_handler(void * p_context)
-{
-//	static uint16_t change_cnt;
-//	static uint8_t duty_cnt;
-//	uint32_t max_changes = 0;
-//	uint8_t max_duty = 0;
-//	
-//	uint32_t err_code;
-//	
-//	low_power_pwm_t * pwm_instance = (low_power_pwm_t*)p_context;
-
-//	switch(m_app_state.led[1]) {
-//		case LED_RUNNING:
-//			max_changes = SMS_LED_BLINK_FAST_TICKS;
-//			max_duty = 100/SMS_LED_RUNNING_DUTY;
-//			break;
-//		case LED_CALIB_ACCEL:
-//			max_changes = SMS_LED_BLINK_MEDIUM_TICKS;
-//			break;
-//		default:
-//			break;
-//	}
-//	
-//	change_cnt++;
-//		
-//	if(change_cnt > max_changes) {
-//		switch(m_app_state.led[1]) {
-//			case LED_RUNNING:
-//				if(pwm_instance->duty_cycle > 0) {
-//					duty_cnt = 0;
-//					err_code = low_power_pwm_duty_set(pwm_instance, 0);
-//				}
-//				else {
-//					duty_cnt++;
-//					if(duty_cnt > max_duty) {
-//						err_code = low_power_pwm_duty_set(pwm_instance, SMS_LED_ON_DUTY);
-//					}
-//					else {
-//						err_code = low_power_pwm_duty_set(pwm_instance, 0);
-//					}
-//				}
-//				APP_ERROR_CHECK(err_code);
-//				break;
-//				
-//			case LED_CALIB_ACCEL:
-//				if(pwm_instance->duty_cycle > 0) {
-//					err_code = low_power_pwm_duty_set(pwm_instance, 0);
-//				}
-//				else {
-//					err_code = low_power_pwm_duty_set(pwm_instance, SMS_LED_ON_DUTY);
-//				}
-//				APP_ERROR_CHECK(err_code);
-//				break;
-//					
-//			case LED_DISCONNECTED:
-//				m_app_state.pwm[1] = PWM_OFF;
-//				break;
-//			
-//			default:
-//				break;
-//		}
-
-//		change_cnt = 0;
-//	}
-}
 
 // BLE
 /**@brief Function for handling a Connection Parameters error.
@@ -733,17 +557,10 @@ static void conn_params_error_handler(uint32_t nrf_error)
  */
 static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 {
-    uint32_t err_code;
-	
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_FAST:
-//            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
-//            APP_ERROR_CHECK(err_code);
-            break;
         case BLE_ADV_EVT_IDLE:
-//            sleep_mode_enter();
-            break;
         default:
             break;
     }
@@ -784,30 +601,15 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
         case BLE_GAP_EVT_CONNECTED:
 			NRF_LOG_DEBUG("Connected\r\n");
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-//			m_app_state.led[0] = LED_CONNECTING;
-//			m_app_state.pwm[1] = PWM_ON;
-//			m_app_state.led[1] = LED_RUNNING;
-//			low_power_pwm_start(&low_power_pwm_data, low_power_pwm_data.bit_mask);
-//			NRF_LOG_DEBUG("Stopping timer\n\r");
-//			app_timer_stop(led0_timer_id);
 			m_app_state.sms = SMS_CONNECTING;
-//			m_led_blink_cnt = 0;
-//			bsp_board_led_invert(SMS_CONN_LED_PIN);
-//			NRF_LOG_DEBUG("Starting timer\n\r");
-//			app_timer_start(led0_timer_id,
-//					APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_FAST_MS, UNIT_1_00_MS), 0),
-//					NULL);
-					
             break; // BLE_GAP_EVT_CONNECTED
 
         case BLE_GAP_EVT_DISCONNECTED:
 			NRF_LOG_DEBUG("Disconnected\r\n");
-//			m_app_state.led[1] = LED_DISCONNECTED;
 			sensors_stop();
 			if(m_app_state.sms == SMS_RUNNING) {
 				m_app_state.sms = SMS_ADV_START;
 			}
-
             break; // BLE_GAP_EVT_DISCONNECTED
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
@@ -921,31 +723,6 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 static void leds_init(void)
 {
     bsp_board_leds_init();
-//	uint32_t err_code;
-//	low_power_pwm_config_t low_power_pwm_config;
-//	low_power_pwm_config.active_high = false;
-//	low_power_pwm_config.period = SMS_PWM_PERIOD;
-//	low_power_pwm_config.bit_mask = BSP_LED_0_MASK;
-//	low_power_pwm_config.p_timer_id = &led0_timer_id;
-//	low_power_pwm_config.p_port = NRF_GPIO;
-//	
-//	m_app_state.pwm[0] = PWM_OFF;
-//	err_code = low_power_pwm_init((&low_power_pwm_conn), &low_power_pwm_config, pwm_conn_handler);
-//	APP_ERROR_CHECK(err_code);
-//	err_code = low_power_pwm_duty_set(&low_power_pwm_conn, SMS_LED_ON_DUTY);
-//	APP_ERROR_CHECK(err_code);
-//	
-//	low_power_pwm_config.active_high = false;
-//	low_power_pwm_config.period = SMS_PWM_PERIOD;
-//	low_power_pwm_config.bit_mask = BSP_LED_1_MASK;
-//	low_power_pwm_config.p_timer_id = &led1_timer_id;
-//	low_power_pwm_config.p_port = NRF_GPIO;
-//	
-//	m_app_state.pwm[1] = PWM_OFF;
-//	err_code = low_power_pwm_init((&low_power_pwm_data), &low_power_pwm_config, pwm_data_handler);
-//	APP_ERROR_CHECK(err_code);
-//	err_code = low_power_pwm_duty_set(&low_power_pwm_data, SMS_LED_ON_DUTY);
-//	APP_ERROR_CHECK(err_code);
 }
 
 
@@ -1015,23 +792,23 @@ static void timers_init(void)
 	// - button long pressing timer
 	err_code = app_timer_create(&button_press_timer_id,
 								APP_TIMER_MODE_SINGLE_SHOT,
-								button_press_timeout_handler);
+								(app_timer_timeout_handler_t)button_press_timeout_handler);
 	APP_ERROR_CHECK(err_code);
 	
 	// - SAADC polling
 	err_code = app_timer_create(&saadc_timer_id,
 								APP_TIMER_MODE_REPEATED,
-								saadc_timer_handler);
+								(app_timer_timeout_handler_t)saadc_timer_handler);
 	APP_ERROR_CHECK(err_code);
 	
 	// - LEDs blinking timers
 	err_code = app_timer_create(&led0_timer_id,
 								APP_TIMER_MODE_SINGLE_SHOT,
-								led0_timer_handler);
+								(app_timer_timeout_handler_t)led0_timer_handler);
 	APP_ERROR_CHECK(err_code);
 	err_code = app_timer_create(&led1_timer_id,
 								APP_TIMER_MODE_SINGLE_SHOT,
-								led1_timer_handler);
+								(app_timer_timeout_handler_t)led1_timer_handler);
 	APP_ERROR_CHECK(err_code);
 }
 
@@ -1247,11 +1024,6 @@ void advertising_start(void)
 					APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_FAST_MS, UNIT_1_00_MS), 0),
 					NULL);
 	
-//	m_app_state.pwm[0] = PWM_ON;
-//	m_app_state.led[0] = LED_ADVERTISING;
-//	err_code = low_power_pwm_start((&low_power_pwm_conn), low_power_pwm_conn.bit_mask);
-//	APP_ERROR_CHECK(err_code);
-	
 	err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
 	APP_ERROR_CHECK(err_code);
 }
@@ -1305,14 +1077,14 @@ int main(void)
     ret_code_t err_code;
     
     // Setup log
-	err_code = NRF_LOG_INIT(NULL);
-	APP_ERROR_CHECK(err_code);
-	uint8_t fw_msb, fw_lsb;
-	fw_msb = ((SMS_VERSION_ID & 0xFF) > 8);
-	fw_lsb = (SMS_VERSION_ID & 0x0F);
-	NRF_LOG_INFO("===============================\n\r");
-	NRF_LOG_INFO("SMS sensors firmware v%d.%d, r%03d\n\r", fw_msb, fw_lsb, SMS_RELEASE_ID);
-	NRF_LOG_INFO("===============================\n\n\r");
+//	err_code = NRF_LOG_INIT(NULL);
+//	APP_ERROR_CHECK(err_code);
+//	uint8_t fw_msb, fw_lsb;
+//	fw_msb = ((SMS_VERSION_ID & 0xFF) > 8);
+//	fw_lsb = (SMS_VERSION_ID & 0x0F);
+//	NRF_LOG_INFO("===============================\n\r");
+//	NRF_LOG_INFO("SMS sensors firmware v%d.%d, r%03d\n\r", fw_msb, fw_lsb, SMS_RELEASE_ID);
+//	NRF_LOG_INFO("===============================\n\n\r");
 
 	// Initialize hardware & services
     timers_init();
@@ -1331,16 +1103,11 @@ int main(void)
     APP_ERROR_CHECK(err_code);
 		
 	// Start advertising
-//	advertising_start();
 	m_app_state.sms = SMS_ADV_START;
-
+	
     // Enter main loop.
     for (;;)
     {
-		// PWM switch-off command cannot be set in the pwm_handler...
-//		if(m_app_state.pwm[0] == PWM_OFF) low_power_pwm_stop(&low_power_pwm_conn);
-//		if(m_app_state.pwm[1] == PWM_OFF) low_power_pwm_stop(&low_power_pwm_data);
-
 		switch(m_app_state.sms)
 		{
 			case SMS_ADV_START:
