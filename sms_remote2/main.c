@@ -59,13 +59,13 @@
 #if (NRF_SD_BLE_API_VERSION == 3)
 	#define NRF_BLE_MAX_MTU_SIZE		GATT_MTU_SIZE_DEFAULT					/**< MTU size used in the softdevice enabling and to reply to a BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST event. */
 #endif
-#define SMS_ADV_INTERVAL                320 //64										/**< The advertising interval (in units of 0.625 ms; this value corresponds to 40 ms). */
+#define SMS_ADV_INTERVAL                160 //64								/**< The advertising interval (in units of 0.625 ms; this value corresponds to 100 ms). */
 #define SMS_ADV_TIMEOUT_IN_SECONDS      30										/**< The advertisement timeout value in seconds */
 #define SMS_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2	/**< Reply when unsupported features are requested. */
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)			/**< Minimum acceptable connection interval (15 ms). */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)			/**< Maximum acceptable connection interval (20 ms). */
-#define SLAVE_LATENCY                   499										/**< Slave latency. Range: 0 - 499. Constraint: sup_timeout > 2 x (slave_latency + 1) x conn_interval */
-#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(21000, UNIT_10_MS)			/**< Connection supervisory time-out (2 seconds). */
+#define SLAVE_LATENCY                   50										/**< Slave latency. Range: 0 - 499. Constraint: sup_timeout > 2 x (slave_latency + 1) x conn_interval */
+#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(3000, UNIT_10_MS)			/**< Connection supervisory time-out (3 seconds). */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER)	/**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)	/**< Time between each call to sd_ble_gap_conn_param_update after the first call (5 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3										/**< Number of attempts before giving up the connection parameter negotiation. */
@@ -103,7 +103,7 @@
 #define APP_TIMER_MAX_TIMERS            10										/**< Maximum number of simultaneously created timers. */
 #define APP_TIMER_OP_QUEUE_SIZE         8										/**< Size of timer operation queues. */
 // Batgauge/SAADC
-#define SMS_BATGAUGE_SAMPLE_RATE_MS		1000									/* Time between each ADC sample */
+#define SMS_BATGAUGE_SAMPLE_RATE_MS		100									/* Time between each ADC sample */
 #define ADC_SAMPLES_IN_BUFFER 			20										/* Number of ADC samples before a batgauge averaging is called */
 #define BAT_CONV_ADC0					146
 #define BAT_CONV_ADC100					161
@@ -140,14 +140,6 @@ enum led_states {
 	LED_SWITCHING_OFF,
 	LED_ERROR
 };
-enum pwm_states {
-	PWM_OFF,
-	PWM_ON
-};
-enum pwm_pos {
-	PWM_CONN = 0,
-	PWM_DATA
-};
 struct batgauge_status_s {
 	bool start;
 	bool init_ok;
@@ -159,7 +151,6 @@ struct batgauge_status_s {
 typedef struct {
 	enum sms_running_states sms;
 	enum led_states led[2];
-	enum pwm_states pwm[2];
 	struct batgauge_status_s batgauge;
 }app_state_t;
 app_state_t m_app_state;
@@ -386,6 +377,7 @@ static void led0_timer_handler(void)
 				app_timer_start(led1_timer_id,
 						APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_ULTRA_MS, UNIT_1_00_MS), 0),
 						NULL);
+				if(m_app_state.batgauge.init_ok) m_app_state.batgauge.start = true;
 			}
 			break;
 			
@@ -1133,20 +1125,20 @@ int main(void)
 				break;
 		}
 		
-		// Start flag of the battery gauge (SAADC)
-		if(m_app_state.batgauge.start)
-		{
+//		// Start flag of the battery gauge (SAADC)
+//		if(m_app_state.batgauge.start)
+//		{
 //			nrf_drv_saadc_sample();
 //			app_timer_start(saadc_timer_id,
 //							APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_BATGAUGE_SAMPLE_RATE_MS, UNIT_1_00_MS), 0),
 //							NULL);
 //			m_app_state.batgauge.enabled = true;
 //			m_app_state.batgauge.start = false;
-		}
+//		}
 
-		// New value flag of the battery gauge... sends notification automatically
-		if(m_app_state.batgauge.new_value)
-		{
+//		// New value flag of the battery gauge... sends notification automatically
+//		if(m_app_state.batgauge.new_value)
+//		{
 //			m_app_state.batgauge.new_value = false;
 //			uint32_t err_code;
 //			err_code = ble_bas_battery_level_update(&m_bas, (uint8_t)m_app_state.batgauge.bat_level);
@@ -1158,7 +1150,7 @@ int main(void)
 //			{
 //				APP_ERROR_HANDLER(err_code);
 //			}
-		}
+//		}
 
         if (NRF_LOG_PROCESS() == false)
         {
