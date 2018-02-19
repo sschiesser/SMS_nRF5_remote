@@ -103,12 +103,12 @@
 #define APP_TIMER_MAX_TIMERS            10										/**< Maximum number of simultaneously created timers. */
 #define APP_TIMER_OP_QUEUE_SIZE         8										/**< Size of timer operation queues. */
 // Batgauge/SAADC
-#define SMS_BATGAUGE_SAMPLE_RATE_MS		100									/* Time between each ADC sample */
-#define ADC_SAMPLES_IN_BUFFER 			20										/* Number of ADC samples before a batgauge averaging is called */
-#define BAT_CONV_ADC0					146
-#define BAT_CONV_ADC100					161
-#define BAT_CONV_DELTA					(100/(BAT_CONV_ADC100-BAT_CONV_ADC0))
-#define BAT_CONV_OFFSET					(-BAT_CONV_DELTA * BAT_CONV_ADC0)
+#define SMS_BATGAUGE_SAMPLE_RATE_MS		500										/* Time between each SAADC samples */
+#define SMS_BATGAUGE_SAMPLES 			16										/* Number of ADC samples before a batgauge averaging is called */
+#define SMS_BATGAUGE_OFFSET				34.1f
+#define SMS_BATGAUGE_DIVIDER			114.0f
+#define SMS_BATGAUGE_TRIGGER_MIN		0.25
+#define	SMS_BATGAUGE_TRIGGER_MS			(SMS_BATGAUGE_TRIGGER_MIN * 60 * 1000)
 
 
 
@@ -159,7 +159,7 @@ app_state_t m_app_state;
 static uint8_t 							m_button_mask = 0;							/* Button mask to remember previous pressing state */
 static uint8_t							m_led_blink_cnt = 0;
 // Batgauge/SAADC
-static nrf_saadc_value_t     			m_buffer_pool[2][ADC_SAMPLES_IN_BUFFER];	/* Buffers to store n ADC samples (averaging) */
+static nrf_saadc_value_t     			m_buffer_pool[SMS_BATGAUGE_SAMPLES];		/* Buffers to store n ADC samples (averaging) */
 static uint32_t							m_adc_evt_counter;							/* ADC event counter (debug) */
 // BLE/connection
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;	/* Handle of the current connection */
@@ -171,6 +171,7 @@ APP_TIMER_DEF(button_press_timer_id);
 APP_TIMER_DEF(saadc_timer_id);
 APP_TIMER_DEF(led0_timer_id);
 APP_TIMER_DEF(led1_timer_id);
+APP_TIMER_DEF(batgauge_timer_id);
 
 
 /* ====================================================================
@@ -180,6 +181,7 @@ APP_TIMER_DEF(led1_timer_id);
  * ==================================================================== */
 void advertising_start(void);
 void sensors_stop(void);
+void batgauge_init(void);
 
 
 /**@brief Application error handler overwitten.
@@ -354,10 +356,6 @@ static void led0_timer_handler(void)
 					APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_FAST_MS, UNIT_1_00_MS), 0),
 					NULL);
 			}
-//			bsp_board_led_invert(SMS_CONN_LED_PIN);
-//			app_timer_start(led0_timer_id,
-//					APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_FAST_MS, UNIT_1_00_MS), 0),
-//					NULL);
 			break;
 		
 		case SMS_RUNNING:
@@ -377,7 +375,7 @@ static void led0_timer_handler(void)
 				app_timer_start(led1_timer_id,
 						APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_ULTRA_MS, UNIT_1_00_MS), 0),
 						NULL);
-				if(m_app_state.batgauge.init_ok) m_app_state.batgauge.start = true;
+//				if(m_app_state.batgauge.init_ok) m_app_state.batgauge.start = true;
 			}
 			break;
 			
@@ -482,39 +480,49 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
 }
 
 
-/**@brief Function for handling a batgauge event.
+/**@brief Function for handling a finished SAADC conversion.
  *
  * @details	After ADC_SAMPLES_IN_BUFFER ADC sampling, the batgauge handler is called to calculate a
  *			battery level value and set the new value flag.
  *
  * @param[in] p_event	Select which SAADC event has called the handler
  */
-void batgauge_event_handler(nrf_drv_saadc_evt_t const * p_event)
+void saadc_conversion_done_handler(nrf_drv_saadc_evt_t const * p_event)
 {
 	NRF_LOG_DEBUG("Batgauge event!!\n\r");
 	if(p_event->type == NRF_DRV_SAADC_EVT_DONE)
 	{
 		ret_code_t err_code;
-		err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, ADC_SAMPLES_IN_BUFFER);
+		err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, SMS_BATGAUGE_SAMPLES);
 		APP_ERROR_CHECK(err_code);
 		
 		uint8_t i;
 		uint32_t sum = 0;
 		NRF_LOG_DEBUG("ADC event number: %d\n\r", (int)m_adc_evt_counter);
-		for(i = 0; i < ADC_SAMPLES_IN_BUFFER; i++)
+		for(i = 0; i < SMS_BATGAUGE_SAMPLES; i++)
 		{
-			m_buffer_pool[0][i] = p_event->data.done.p_buffer[i];
-			NRF_LOG_DEBUG("%d\r\n", m_buffer_pool[0][i]);
-			sum += m_buffer_pool[0][i];
+			m_buffer_pool[i] = p_event->data.done.p_buffer[i];
+			NRF_LOG_DEBUG("%d\r\n", m_buffer_pool[i]);
+			sum += m_buffer_pool[i];
 		}
-		float adc = (float)sum / ADC_SAMPLES_IN_BUFFER;
-		float level = (float)BAT_CONV_DELTA * adc + (float)BAT_CONV_OFFSET;
-		if(level > 100) level = 100;
+		uint16_t adc = (uint16_t)((float)sum / (float)SMS_BATGAUGE_SAMPLES);
+		uint16_t mvolts = (uint16_t)( (((float)adc + SMS_BATGAUGE_OFFSET) / SMS_BATGAUGE_DIVIDER) * 1000 );
+		uint8_t level = battery_level_in_percent(mvolts);
 		m_app_state.batgauge.bat_level = (uint32_t)level;
-//		m_app_state.batgauge.bat_level = (uint32_t)adc;
 		NRF_LOG_DEBUG("Batgauge avg: %d (sum: %d)\n\r", m_app_state.batgauge.bat_level, sum);
 		m_adc_evt_counter++;
 		m_app_state.batgauge.new_value = true;
+		
+		app_timer_stop(saadc_timer_id);
+		nrf_drv_saadc_uninit();
+		nrf_drv_saadc_uninit();
+		NRF_SAADC->INTENCLR = (SAADC_INTENCLR_END_Clear << SAADC_INTENCLR_END_Pos);
+		NVIC_ClearPendingIRQ(SAADC_IRQn);
+		app_timer_start(batgauge_timer_id,
+			APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_BATGAUGE_TRIGGER_MS, UNIT_1_00_MS), 0),
+			NULL);
+		m_app_state.batgauge.init_ok = false;
+		m_app_state.batgauge.enabled = false;
 	}
 }
 
@@ -526,11 +534,17 @@ void batgauge_event_handler(nrf_drv_saadc_evt_t const * p_event)
  */
 static void saadc_timer_handler(void * p_context)
 {
-//	NRF_LOG_DEBUG("saadc timer done\n\r");
-//	nrf_drv_saadc_sample();
+	NRF_LOG_DEBUG("saadc timer done\n\r");
+	nrf_drv_saadc_sample();
 }
 
-//	static uint16_t change_cnt;
+
+
+static void batgauge_event_handler(void)
+{
+	NRF_LOG_DEBUG("Retriggering batgauge\n\r");
+	batgauge_init();
+}
 
 // BLE
 /**@brief Function for handling a Connection Parameters error.
@@ -722,28 +736,29 @@ static void leds_init(void)
  *
  * @details Configure the SAADC channel and the sample buffer. But DON'T START!
  */
-static void batgauge_init(void)
+void batgauge_init(void)
 {
 	NRF_LOG_DEBUG("Preparing AIN0 as battery level input\r\n");
 	ret_code_t err_code;
+	err_code = nrf_drv_saadc_init(NULL, saadc_conversion_done_handler);
+	APP_ERROR_CHECK(err_code);
+
 	nrf_saadc_channel_config_t channel_config =
 		NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
-	
-	err_code = nrf_drv_saadc_init(NULL, batgauge_event_handler);
-	APP_ERROR_CHECK(err_code);
-	
+	channel_config.gain = NRF_SAADC_GAIN1;
+	channel_config.acq_time = NRF_SAADC_ACQTIME_40US;
 	err_code = nrf_drv_saadc_channel_init(0, &channel_config);
 	APP_ERROR_CHECK(err_code);
 	
-	err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0], ADC_SAMPLES_IN_BUFFER);
+	err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool, SMS_BATGAUGE_SAMPLES);
 	APP_ERROR_CHECK(err_code);
 	
-	err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[1], ADC_SAMPLES_IN_BUFFER);
-	APP_ERROR_CHECK(err_code);
+//	err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[1], SMS_BATGAUGE_SAMPLES);
+//	APP_ERROR_CHECK(err_code);
 	
 	m_app_state.batgauge.init_ok = true;
-	m_app_state.batgauge.enabled = false;
-	m_app_state.batgauge.start = false;
+	m_app_state.batgauge.enabled = true;
+	m_app_state.batgauge.start = true;
 }
 
 
@@ -801,6 +816,12 @@ static void timers_init(void)
 	err_code = app_timer_create(&led1_timer_id,
 								APP_TIMER_MODE_SINGLE_SHOT,
 								(app_timer_timeout_handler_t)led1_timer_handler);
+	APP_ERROR_CHECK(err_code);
+	
+	// - batgauge timer
+	err_code = app_timer_create(&batgauge_timer_id,
+								APP_TIMER_MODE_SINGLE_SHOT,
+								(app_timer_timeout_handler_t)batgauge_event_handler);
 	APP_ERROR_CHECK(err_code);
 }
 
@@ -1044,7 +1065,13 @@ static void power_manage(void)
  */
 void sensors_stop(void)
 {
-//	app_timer_stop(saadc_timer_id);
+	app_timer_stop(saadc_timer_id);
+	nrf_drv_saadc_uninit();
+	nrf_drv_saadc_uninit();
+	NRF_SAADC->INTENCLR = (SAADC_INTENCLR_END_Clear << SAADC_INTENCLR_END_Pos);
+	NVIC_ClearPendingIRQ(SAADC_IRQn);
+	app_timer_stop(batgauge_timer_id);
+	m_app_state.batgauge.init_ok = false;
 	m_app_state.batgauge.enabled = false;
 }
 
@@ -1069,14 +1096,14 @@ int main(void)
     ret_code_t err_code;
     
     // Setup log
-//	err_code = NRF_LOG_INIT(NULL);
-//	APP_ERROR_CHECK(err_code);
-//	uint8_t fw_msb, fw_lsb;
-//	fw_msb = ((SMS_VERSION_ID & 0xFF) > 8);
-//	fw_lsb = (SMS_VERSION_ID & 0x0F);
-//	NRF_LOG_INFO("===============================\n\r");
-//	NRF_LOG_INFO("SMS sensors firmware v%d.%d, r%03d\n\r", fw_msb, fw_lsb, SMS_RELEASE_ID);
-//	NRF_LOG_INFO("===============================\n\n\r");
+	err_code = NRF_LOG_INIT(NULL);
+	APP_ERROR_CHECK(err_code);
+	uint8_t fw_msb, fw_lsb;
+	fw_msb = ((SMS_VERSION_ID & 0xFF) > 8);
+	fw_lsb = (SMS_VERSION_ID & 0x0F);
+	NRF_LOG_INFO("===============================\n\r");
+	NRF_LOG_INFO("SMS sensors firmware v%d.%d, r%03d\n\r", fw_msb, fw_lsb, SMS_RELEASE_ID);
+	NRF_LOG_INFO("===============================\n\n\r");
 
 	// Initialize hardware & services
     timers_init();
@@ -1088,8 +1115,6 @@ int main(void)
     advertising_init();
     conn_params_init();
 
-//	batgauge_init();
-	
 	// Initialize & configure peripherals
     err_code = app_button_enable();
     APP_ERROR_CHECK(err_code);
@@ -1119,38 +1144,40 @@ int main(void)
 				app_timer_start(led0_timer_id,
 						APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_LED_BLINK_ULTRA_MS, UNIT_1_00_MS), 0),
 						NULL);
+//				batgauge_init();
 				break;
 			
 			default:
 				break;
 		}
 		
-//		// Start flag of the battery gauge (SAADC)
-//		if(m_app_state.batgauge.start)
-//		{
-//			nrf_drv_saadc_sample();
-//			app_timer_start(saadc_timer_id,
-//							APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_BATGAUGE_SAMPLE_RATE_MS, UNIT_1_00_MS), 0),
-//							NULL);
-//			m_app_state.batgauge.enabled = true;
-//			m_app_state.batgauge.start = false;
-//		}
+		// Start flag of the battery gauge (SAADC)
+		if(m_app_state.batgauge.start)
+		{
+			NRF_LOG_DEBUG("Starting battery level measurement\n\r");
+			nrf_drv_saadc_sample();
+			app_timer_start(saadc_timer_id,
+							APP_TIMER_TICKS(MSEC_TO_UNITS(SMS_BATGAUGE_SAMPLE_RATE_MS, UNIT_1_00_MS), 0),
+							NULL);
+			m_app_state.batgauge.enabled = true;
+			m_app_state.batgauge.start = false;
+		}
 
-//		// New value flag of the battery gauge... sends notification automatically
-//		if(m_app_state.batgauge.new_value)
-//		{
-//			m_app_state.batgauge.new_value = false;
-//			uint32_t err_code;
-//			err_code = ble_bas_battery_level_update(&m_bas, (uint8_t)m_app_state.batgauge.bat_level);
-//			if((err_code != NRF_SUCCESS) &&							// 0x0000
-//				(err_code != NRF_ERROR_INVALID_STATE) &&			// 0x0008
-//				(err_code != BLE_ERROR_INVALID_CONN_HANDLE) &&		// 0x3002
-//				(err_code != BLE_ERROR_NO_TX_PACKETS) &&			// 0x3004
-//				(err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING))		// 0x3401
-//			{
-//				APP_ERROR_HANDLER(err_code);
-//			}
-//		}
+		// New value flag of the battery gauge... sends notification automatically
+		if(m_app_state.batgauge.new_value)
+		{
+			m_app_state.batgauge.new_value = false;
+			uint32_t err_code;
+			err_code = ble_bas_battery_level_update(&m_bas, (uint8_t)m_app_state.batgauge.bat_level);
+			if((err_code != NRF_SUCCESS) &&							// 0x0000
+				(err_code != NRF_ERROR_INVALID_STATE) &&			// 0x0008
+				(err_code != BLE_ERROR_INVALID_CONN_HANDLE) &&		// 0x3002
+				(err_code != BLE_ERROR_NO_TX_PACKETS) &&			// 0x3004
+				(err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING))		// 0x3401
+			{
+				APP_ERROR_HANDLER(err_code);
+			}
+		}
 
         if (NRF_LOG_PROCESS() == false)
         {
