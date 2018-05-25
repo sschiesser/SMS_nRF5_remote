@@ -59,8 +59,8 @@
 #if (NRF_SD_BLE_API_VERSION == 3)
 	#define NRF_BLE_MAX_MTU_SIZE		GATT_MTU_SIZE_DEFAULT					/**< MTU size used in the softdevice enabling and to reply to a BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST event. */
 #endif
-#define SMS_ADV_INTERVAL                160 //64								/**< The advertising interval (in units of 0.625 ms; this value corresponds to 100 ms). */
-#define SMS_ADV_TIMEOUT_IN_SECONDS      30										/**< The advertisement timeout value in seconds */
+#define SMS_ADV_INTERVAL                32//160 //64								/**< The advertising interval (in units of 0.625 ms; this value corresponds to 100 ms). */
+#define SMS_ADV_TIMEOUT_IN_SECONDS      BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED										/**< The advertisement timeout value in seconds */
 #define SMS_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2	/**< Reply when unsupported features are requested. */
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)			/**< Minimum acceptable connection interval (15 ms). */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)			/**< Maximum acceptable connection interval (20 ms). */
