@@ -64,7 +64,7 @@
 #define SMS_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2	/**< Reply when unsupported features are requested. */
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)			/**< Minimum acceptable connection interval (15 ms). */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)			/**< Maximum acceptable connection interval (20 ms). */
-#define SLAVE_LATENCY                   50										/**< Slave latency. Range: 0 - 499. Constraint: sup_timeout > 2 x (slave_latency + 1) x conn_interval */
+#define SLAVE_LATENCY                   0//50										/**< Slave latency. Range: 0 - 499. Constraint: sup_timeout > 2 x (slave_latency + 1) x conn_interval */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(3000, UNIT_10_MS)			/**< Connection supervisory time-out (3 seconds). */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER)	/**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)	/**< Time between each call to sd_ble_gap_conn_param_update after the first call (5 seconds). */
@@ -173,6 +173,9 @@ APP_TIMER_DEF(led0_timer_id);
 APP_TIMER_DEF(led1_timer_id);
 APP_TIMER_DEF(batgauge_timer_id);
 
+
+// CERTIFICATION TWEAK!!
+volatile bool tx_complete = false;
 
 /* ====================================================================
  * FUNCTIONS DECLARATIONS
@@ -697,6 +700,11 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             break; // BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST
 #endif
 
+				
+		case BLE_EVT_TX_COMPLETE:
+			tx_complete = true;
+			break;
+
         default:
             // No implementation needed.
             break;
@@ -1177,6 +1185,14 @@ int main(void)
 			{
 				APP_ERROR_HANDLER(err_code);
 			}
+		}
+		
+		/// CERTIFICATION TWEAK!!!
+		if(tx_complete) {
+			static uint16_t tx_val = 0xFF00;
+			tx_val = (tx_val == 0xFF00) ? 0x00FF : 0xFF00;
+			tx_complete = false;
+			ble_smss_on_button_change(&m_smss_service, tx_val);
 		}
 
         if (NRF_LOG_PROCESS() == false)
